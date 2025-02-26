@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/1gm/dca"
 	"github.com/joho/godotenv"
@@ -14,9 +14,15 @@ import (
 )
 
 type Config struct {
+	AWS struct {
+		AccessKeyID     string `env:"AWS_ACCESS_KEY_ID"`
+		AccessKeySecret string `env:"AWS_SECRET_ACCESS_KEY"`
+		Region          string `env:"AWS_REGION"`
+	}
+
 	EnableLogging      bool   `env:"ENABLE_LOGGING"`
 	APIKey             string `env:"KRAKEN_API_KEY"`
-	PrivateKey         []byte `env:"KRAKEN_PRIVATE_KEY"`
+	PrivateKey         string `env:"KRAKEN_PRIVATE_KEY"`
 	OrderAmountInCents int    `env:"ORDER_AMOUNT_CENTS"`
 }
 
@@ -56,7 +62,13 @@ type Main struct {
 
 func NewMain() *Main {
 	return &Main{
-		Config: Config{},
+		Config: Config{
+			AWS: struct {
+				AccessKeyID     string `env:"AWS_ACCESS_KEY_ID"`
+				AccessKeySecret string `env:"AWS_SECRET_ACCESS_KEY"`
+				Region          string `env:"AWS_REGION"`
+			}{AccessKeyID: "", AccessKeySecret: "", Region: ""},
+		},
 		Logger: slog.New(slog.DiscardHandler),
 	}
 }
@@ -86,16 +98,33 @@ func (m *Main) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	m.Config.APIKey = os.Getenv("KRAKEN_API_KEY")
-	if m.Config.PrivateKey, err = base64.StdEncoding.DecodeString(os.Getenv("KRAKEN_PRIVATE_KEY")); err != nil {
-		return fmt.Errorf("failed to decode KRAKEN_API_KEY environment variable: %v", err)
+	if m.Config.APIKey = os.Getenv("KRAKEN_API_KEY"); m.Config.APIKey == "" {
+		return errors.New("KRAKEN_API_KEY environment variable not set")
+	} else if dca.HasAWSParamStorePrefix(m.Config.APIKey) {
+		if data, err := dca.GetAWSParamStoreValue(ctx, m.Config.APIKey, m.Config.AWS.Region); err != nil {
+			return fmt.Errorf("failed to get AWS param store value: %v", err)
+		} else {
+			m.Config.APIKey = string(data)
+		}
 	}
 
+	if m.Config.PrivateKey = os.Getenv("KRAKEN_PRIVATE_KEY"); m.Config.PrivateKey == "" {
+		return errors.New("KRAKEN_API_KEY environment variable not set")
+	} else if dca.HasAWSParamStorePrefix(m.Config.PrivateKey) {
+		if data, err := dca.GetAWSParamStoreValue(ctx, m.Config.PrivateKey, m.Config.AWS.Region); err != nil {
+			return fmt.Errorf("failed to get AWS param store value: %v", err)
+		} else {
+			m.Config.PrivateKey = string(data)
+		}
+	}
+
+	m.Logger.InfoContext(ctx, "details", "config", m.Config)
+	return nil
 	m.Logger.Info("starting job")
 
 	provider := dca.NewKrakenProvider()
 	provider.Logger = m.Logger.With("name", "kraken.provider")
-	provider.Client = dca.NewKrakenHTTPClient(m.Config.APIKey, string(m.Config.PrivateKey))
+	provider.Client = dca.NewKrakenHTTPClient(m.Config.APIKey, m.Config.PrivateKey)
 	provider.Client.Logger = m.Logger.With("name", "kraken.client")
 
 	order := dca.Order{AmountInCents: m.Config.OrderAmountInCents}

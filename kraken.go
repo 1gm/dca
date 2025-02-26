@@ -27,6 +27,7 @@ type KrakenProvider struct {
 func NewKrakenProvider() *KrakenProvider {
 	return &KrakenProvider{
 		Logger: slog.New(slog.DiscardHandler),
+		Client: NewKrakenHTTPClient("", ""),
 	}
 }
 
@@ -151,7 +152,6 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	params.Set("volume", strconv.FormatFloat(volume, 'f', -1, 64))
 	params.Set("ordertype", "market")
 	params.Set("nonce", strconv.FormatInt(nonce, 10))
-	fmt.Printf("%v\n", params)
 	c.Logger.InfoContext(ctx, "making request", "body", params)
 
 	var req *http.Request

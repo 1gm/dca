@@ -19,7 +19,23 @@ KRAKEN_PRIVATE_KEY=zzxcvzxcvz==
 ORDER_AMOUNT_CENTS=100
 ```
 
-They should be self-explanatory.
+When the following environment variables are defined they will be used when access AWS resources
+
+```bash
+AWS_ACCESS_KEY_ID=youracceskeyid
+AWS_SECRET_ACCESS_KEY=yoursecretaccesskey
+AWS_REGION=us-east-1
+```
+
+AWS resources are accessed when environment variables are prefixed with either: `awssm:` or `awsssme:` the former indicating
+that the resource to be read is from AWS Systems Manager and the latter that it's an encrypted value in AWS Systems Manager. 
+
+Example values include:
+
+```aiignore
+KRAKEN_API_KEY=awsssm:/path/to/my/plaintext/value
+KRAKEN_PRIVATE_KEY=awsssme:/path/to/my/encrypted/value
+```
 
 #### API Key permissions
 
