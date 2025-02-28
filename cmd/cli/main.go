@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/1gm/dca"
@@ -116,6 +117,12 @@ func (m *Main) Run(ctx context.Context) (err error) {
 		} else {
 			m.Config.PrivateKey = string(data)
 		}
+	}
+
+	if data, err := base64.StdEncoding.DecodeString(m.Config.PrivateKey); err != nil {
+		return fmt.Errorf("failed to decode KRAKEN_PRIVATE_KEY environment variable: %v", err)
+	} else {
+		m.Config.PrivateKey = string(data)
 	}
 
 	m.Logger.Info("starting job")

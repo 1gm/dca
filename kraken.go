@@ -39,11 +39,12 @@ func (p KrakenProvider) PlaceOrder(ctx context.Context, order Order) (err error)
 		return err
 	}
 
-	p.Logger.Info(fmt.Sprintf("fetched buy volume: %v", volume))
+	p.Logger.InfoContext(ctx, fmt.Sprintf("fetched buy volume: %v", volume))
 
 	if err = p.Client.PlaceOrder(ctx, volume); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -93,8 +94,8 @@ func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int
 		return 0, fmt.Errorf("failed to fetch buy volume: %w", err)
 	}
 	defer func() {
-		if err = res.Body.Close(); err != nil {
-			c.Logger.WarnContext(ctx, "failed to close response body", "err", err)
+		if cerr := res.Body.Close(); cerr != nil {
+			c.Logger.WarnContext(ctx, "failed to close response body", "err", cerr)
 		}
 	}()
 
@@ -152,12 +153,14 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	params.Set("volume", strconv.FormatFloat(volume, 'f', -1, 64))
 	params.Set("ordertype", "market")
 	params.Set("nonce", strconv.FormatInt(nonce, 10))
-	c.Logger.InfoContext(ctx, "making request", "body", params)
+
+	c.Logger.InfoContext(ctx, "creating HTTP request", "body", params)
 
 	var req *http.Request
 	if req, err = http.NewRequest("POST", "https://api.kraken.com/0/private/AddOrder", bytes.NewBufferString(params.Encode())); err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}
+
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("API-Key", c.APIKey)
@@ -169,33 +172,36 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	}
 
 	defer func() {
-		if err = res.Body.Close(); err != nil {
-			c.Logger.WarnContext(ctx, "failed to close response body", "err", err)
+		if cerr := res.Body.Close(); cerr != nil {
+			c.Logger.WarnContext(ctx, "failed to close response body", "err", cerr)
 		}
 	}()
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
+	var body []byte
+
+	if body, err = io.ReadAll(res.Body); err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var response = struct {
-		Error  []any `json:"error"`
+		Error  []string `json:"error"`
 		Result struct {
 			TransactionID []string `json:"txid"`
 			Description   struct {
 				Order string `json:"order"`
 			} `json:"descr"`
-		} `json:"result"`
+		} `json:"result,omitempty"`
 	}{}
 
 	if err = json.Unmarshal(body, &response); err != nil {
 		return fmt.Errorf("failed to unmarshal response body: %w", err)
-	} else if response.Error != nil && len(response.Error) > 0 {
-		return fmt.Errorf("failed to fetch buy volume: %w", errors.New(response.Error[0].(string)))
 	}
 
-	c.Logger.InfoContext(ctx, "response from buy order placement", "resonse", response)
+	if response.Error != nil && len(response.Error) > 0 {
+		return fmt.Errorf("failed to place order: %s", response.Error[0])
+	}
+
+	c.Logger.InfoContext(ctx, "response from buy order placement", "response", response)
 	return
 }
 
