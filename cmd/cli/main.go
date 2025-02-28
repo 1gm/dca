@@ -118,8 +118,6 @@ func (m *Main) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	m.Logger.InfoContext(ctx, "details", "config", m.Config)
-	return nil
 	m.Logger.Info("starting job")
 
 	provider := dca.NewKrakenProvider()
