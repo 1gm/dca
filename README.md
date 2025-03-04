@@ -10,21 +10,21 @@ Kraken's recurring fee implementation.
 This isn't made available for non-developer use. It's probably going to serve more as an example on how to interact
 with the Kraken API.
 
-To run the application you should define these environment variables (you can create a .env file with this content):
+To run the application you should define the following config file (see [config.example.json](config.example.json))
 
-```bash
-ENABLE_LOGGING=true
-KRAKEN_API_KEY=zxcvzxcv
-KRAKEN_PRIVATE_KEY=zzxcvzxcvz==
-ORDER_AMOUNT_CENTS=100
-```
-
-When the following environment variables are defined they will be used when access AWS resources
-
-```bash
-AWS_ACCESS_KEY_ID=youracceskeyid
-AWS_SECRET_ACCESS_KEY=yoursecretaccesskey
-AWS_REGION=us-east-1
+```json5
+{
+  // optional, only used if accessing AWS resources
+  "awsAccessKeyId": "...",
+  "awsSecretAccessKey": "...",
+  "awsRegion": "...",
+  // end optional
+  "enableLogging": true,
+  // required
+  "krakenApiKey": "...",
+  "krakenPrivateKey": "...",
+  "orderAmountInCents": 500
+}
 ```
 
 AWS resources are accessed when environment variables are prefixed with either: `awssm:` or `awsssme:` the former indicating
@@ -33,8 +33,8 @@ that the resource to be read is from AWS Systems Manager and the latter that it'
 Example values include:
 
 ```aiignore
-KRAKEN_API_KEY=awsssm:/path/to/my/plaintext/value
-KRAKEN_PRIVATE_KEY=awsssme:/path/to/my/encrypted/value
+awsssm:/path/to/my/plaintext/value
+awsssme:/path/to/my/encrypted/value
 ```
 
 #### API Key permissions

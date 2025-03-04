@@ -19,20 +19,28 @@ import (
 	"time"
 )
 
+type KrakenProviderConfig struct {
+	APIKey    string
+	APISecret string
+	Logger    *slog.Logger
+}
+
 type KrakenProvider struct {
 	Logger *slog.Logger
 	Client *KrakenHTTPClient
 }
 
-func NewKrakenProvider() *KrakenProvider {
-	return &KrakenProvider{
-		Logger: slog.New(slog.DiscardHandler),
-		Client: NewKrakenHTTPClient("", ""),
+func NewKrakenProvider(cfg *KrakenProviderConfig) *KrakenProvider {
+	p := &KrakenProvider{
+		Logger: cfg.Logger.With("name", "kraken.provider"),
+		Client: NewKrakenHTTPClient(cfg.APIKey, cfg.APISecret),
 	}
+	p.Client.Logger = cfg.Logger.With("name", "kraken.client")
+	return p
 }
 
 func (p KrakenProvider) PlaceOrder(ctx context.Context, order Order) (err error) {
-	defer WrapErr(&err, "kraken.PlaceOrder")
+	defer WrapErr(&err, "KrakenProvider.PlaceOrder")
 
 	var volume float64
 	if volume, err = p.Client.FetchBuyVolume(ctx, order.AmountInCents); err != nil {
@@ -79,7 +87,7 @@ func NewKrakenHTTPClient(apiKey string, apiSecretKey string) *KrakenHTTPClient {
 
 // FetchBuyVolume finds the amount of BTC to buy in USD
 func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int) (volume float64, err error) {
-	defer WrapErr(&err, "kraken.client.FetchBuyVolume")
+	defer WrapErr(&err, "KrakenHTTPClient.FetchBuyVolume")
 
 	c.Logger.InfoContext(ctx, "fetching buy volume")
 
@@ -142,7 +150,7 @@ func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int
 
 // PlaceOrder places a market order for volume BTC.
 func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err error) {
-	defer WrapErr(&err, "kraken.client.PlaceOrder")
+	defer WrapErr(&err, "KrakenHTTPClient.PlaceOrder")
 
 	c.Logger.InfoContext(ctx, "placing buy order", "volume", volume)
 
@@ -198,7 +206,7 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	}
 
 	if response.Error != nil && len(response.Error) > 0 {
-		return fmt.Errorf("failed to place order: %s", response.Error[0])
+		return fmt.Errorf("failed to place order: %v", c.toError(response.Error[0]))
 	}
 
 	c.Logger.InfoContext(ctx, "response from buy order placement", "response", response)
@@ -214,4 +222,14 @@ func (c *KrakenHTTPClient) generateSignature(path string, data url.Values, nonce
 	mac.Write(append([]byte(path), hash...))
 
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (c *KrakenHTTPClient) toError(message string) error {
+	if message == "EGeneral:Invalid arguments:volume minimum not met" {
+		return ErrOrderToSmall
+	} else if message == "EAPI:Invalid key" {
+		return ErrInvalidAuth
+	}
+
+	return errors.New(message)
 }

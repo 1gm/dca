@@ -3,7 +3,6 @@ package dca
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -40,7 +39,7 @@ func StripAWSParamStorePrefix(key string) string {
 }
 
 func GetAWSParamStoreValue(ctx context.Context, key string, region string) (_ []byte, err error) {
-	defer AddErr(&err, "dca.GetAWSParamStoreValue(%s, %s)", key, region)
+	defer AddErr(&err, "dca.GetAWSParamStoreValue")
 	if HasAWSParamStorePlaintextPrefix(key) {
 		return GetAWSSParamStoreParameter(ctx, key, region)
 	} else if HasAWSParamStoreEncryptedPrefix(key) {
@@ -57,13 +56,15 @@ func GetAWSParamStoreEncryptedParameter(ctx context.Context, key string, region 
 	return getAWSParamStoreParameter(ctx, key, true, region)
 }
 
-func getAWSParamStoreParameter(bgCtx context.Context, key string, encrypted bool, region string) ([]byte, error) {
+func getAWSParamStoreParameter(bgCtx context.Context, key string, encrypted bool, region string) (_ []byte, err error) {
+	defer WrapErr(&err, "dca.GetAWSParamStoreValue")
+
 	ctx, cancel := context.WithTimeout(bgCtx, time.Second*5)
 	defer cancel()
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
+		return nil, fmt.Errorf("error loading AWS configuration: %w", err)
 	}
 
 	ssmClient := ssm.NewFromConfig(cfg)
