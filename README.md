@@ -10,16 +10,27 @@ Kraken's recurring fee implementation.
 This isn't made available for non-developer use. It's probably going to serve more as an example on how to interact
 with the Kraken API.
 
-To run the application you should define these environment variables (you can create a .env file with this content):
+To run the application you should define the following config file (see [config.example.json](config.example.json))
 
-```bash
-ENABLE_LOGGING=true
-KRAKEN_API_KEY=zxcvzxcv
-KRAKEN_PRIVATE_KEY=zzxcvzxcvz==
-ORDER_AMOUNT_CENTS=100
+```json5
+{
+  "enableLogging": true, 
+  // required
+  "krakenApiKey": "...",
+  "krakenPrivateKey": "...",
+  "orderAmountInCents": 500
+}
 ```
 
-They should be self-explanatory.
+AWS resources are accessed when environment variables are prefixed with either: `awssm:` or `awsssme:` the former indicating
+that the resource to be read is from AWS Systems Manager and the latter that it's an encrypted value in AWS Systems Manager. 
+
+Example values include:
+
+```text
+awsssm:///path/to/my/value
+awsssme:///path/to/my/encrypted/value
+```
 
 #### API Key permissions
 

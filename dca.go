@@ -2,6 +2,7 @@ package dca
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -18,6 +19,13 @@ type Order struct {
 type Provider interface {
 	PlaceOrder(ctx context.Context, order Order) error
 }
+
+var (
+	// ErrOrderToSmall happens when an order is rejected due to volume being too low
+	ErrOrderToSmall = errors.New("order is too small")
+	// ErrInvalidAuth occurs when an API credential is invalid
+	ErrInvalidAuth = errors.New("invalid auth")
+)
 
 // AddErr adds context and creates an opaque error.
 // Example use:

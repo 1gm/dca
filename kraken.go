@@ -19,30 +19,40 @@ import (
 	"time"
 )
 
+type KrakenProviderConfig struct {
+	APIKey    string
+	APISecret string
+	Logger    *slog.Logger
+}
+
 type KrakenProvider struct {
 	Logger *slog.Logger
 	Client *KrakenHTTPClient
 }
 
-func NewKrakenProvider() *KrakenProvider {
-	return &KrakenProvider{
-		Logger: slog.New(slog.DiscardHandler),
+func NewKrakenProvider(cfg *KrakenProviderConfig) *KrakenProvider {
+	p := &KrakenProvider{
+		Logger: cfg.Logger.With("name", "kraken.provider"),
+		Client: NewKrakenHTTPClient(cfg.APIKey, cfg.APISecret),
 	}
+	p.Client.Logger = cfg.Logger.With("name", "kraken.client")
+	return p
 }
 
 func (p KrakenProvider) PlaceOrder(ctx context.Context, order Order) (err error) {
-	defer WrapErr(&err, "kraken.PlaceOrder")
+	defer WrapErr(&err, "KrakenProvider.PlaceOrder")
 
 	var volume float64
 	if volume, err = p.Client.FetchBuyVolume(ctx, order.AmountInCents); err != nil {
 		return err
 	}
 
-	p.Logger.Info(fmt.Sprintf("fetched buy volume: %v", volume))
+	p.Logger.InfoContext(ctx, fmt.Sprintf("fetched buy volume: %v", volume))
 
 	if err = p.Client.PlaceOrder(ctx, volume); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -77,7 +87,7 @@ func NewKrakenHTTPClient(apiKey string, apiSecretKey string) *KrakenHTTPClient {
 
 // FetchBuyVolume finds the amount of BTC to buy in USD
 func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int) (volume float64, err error) {
-	defer WrapErr(&err, "kraken.client.FetchBuyVolume")
+	defer WrapErr(&err, "KrakenHTTPClient.FetchBuyVolume")
 
 	c.Logger.InfoContext(ctx, "fetching buy volume")
 
@@ -92,8 +102,8 @@ func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int
 		return 0, fmt.Errorf("failed to fetch buy volume: %w", err)
 	}
 	defer func() {
-		if err = res.Body.Close(); err != nil {
-			c.Logger.WarnContext(ctx, "failed to close response body", "err", err)
+		if cerr := res.Body.Close(); cerr != nil {
+			c.Logger.WarnContext(ctx, "failed to close response body", "err", cerr)
 		}
 	}()
 
@@ -140,7 +150,7 @@ func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int
 
 // PlaceOrder places a market order for volume BTC.
 func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err error) {
-	defer WrapErr(&err, "kraken.client.PlaceOrder")
+	defer WrapErr(&err, "KrakenHTTPClient.PlaceOrder")
 
 	c.Logger.InfoContext(ctx, "placing buy order", "volume", volume)
 
@@ -151,13 +161,14 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	params.Set("volume", strconv.FormatFloat(volume, 'f', -1, 64))
 	params.Set("ordertype", "market")
 	params.Set("nonce", strconv.FormatInt(nonce, 10))
-	fmt.Printf("%v\n", params)
-	c.Logger.InfoContext(ctx, "making request", "body", params)
+
+	c.Logger.InfoContext(ctx, "creating HTTP request", "body", params)
 
 	var req *http.Request
 	if req, err = http.NewRequest("POST", "https://api.kraken.com/0/private/AddOrder", bytes.NewBufferString(params.Encode())); err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}
+
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("API-Key", c.APIKey)
@@ -169,33 +180,36 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	}
 
 	defer func() {
-		if err = res.Body.Close(); err != nil {
-			c.Logger.WarnContext(ctx, "failed to close response body", "err", err)
+		if cerr := res.Body.Close(); cerr != nil {
+			c.Logger.WarnContext(ctx, "failed to close response body", "err", cerr)
 		}
 	}()
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
+	var body []byte
+
+	if body, err = io.ReadAll(res.Body); err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var response = struct {
-		Error  []any `json:"error"`
+		Error  []string `json:"error"`
 		Result struct {
 			TransactionID []string `json:"txid"`
 			Description   struct {
 				Order string `json:"order"`
 			} `json:"descr"`
-		} `json:"result"`
+		} `json:"result,omitempty"`
 	}{}
 
 	if err = json.Unmarshal(body, &response); err != nil {
 		return fmt.Errorf("failed to unmarshal response body: %w", err)
-	} else if response.Error != nil && len(response.Error) > 0 {
-		return fmt.Errorf("failed to fetch buy volume: %w", errors.New(response.Error[0].(string)))
 	}
 
-	c.Logger.InfoContext(ctx, "response from buy order placement", "resonse", response)
+	if response.Error != nil && len(response.Error) > 0 {
+		return fmt.Errorf("failed to place order: %v", c.toError(response.Error[0]))
+	}
+
+	c.Logger.InfoContext(ctx, "response from buy order placement", "response", response)
 	return
 }
 
@@ -208,4 +222,14 @@ func (c *KrakenHTTPClient) generateSignature(path string, data url.Values, nonce
 	mac.Write(append([]byte(path), hash...))
 
 	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (c *KrakenHTTPClient) toError(message string) error {
+	if message == "EGeneral:Invalid arguments:volume minimum not met" {
+		return ErrOrderToSmall
+	} else if message == "EAPI:Invalid key" {
+		return ErrInvalidAuth
+	}
+
+	return errors.New(message)
 }

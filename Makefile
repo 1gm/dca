@@ -10,7 +10,7 @@ endif
 default: run
 
 run:
-	@go run cmd/cli/main.go
+	@go run cmd/cli/main.go --config config.json
 
 build:
 	@CGO_ENABLED=0 go build -ldflags="-X 'main.version=$(VERSION)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(DATE)' -s -w" -o bin/dca-cli ./cmd/cli
