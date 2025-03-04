@@ -14,12 +14,7 @@ To run the application you should define the following config file (see [config.
 
 ```json5
 {
-  // optional, only used if accessing AWS resources
-  "awsAccessKeyId": "...",
-  "awsSecretAccessKey": "...",
-  "awsRegion": "...",
-  // end optional
-  "enableLogging": true,
+  "enableLogging": true, 
   // required
   "krakenApiKey": "...",
   "krakenPrivateKey": "...",
@@ -32,9 +27,9 @@ that the resource to be read is from AWS Systems Manager and the latter that it'
 
 Example values include:
 
-```aiignore
-awsssm:/path/to/my/plaintext/value
-awsssme:/path/to/my/encrypted/value
+```text
+awsssm:///path/to/my/value
+awsssme:///path/to/my/encrypted/value
 ```
 
 #### API Key permissions

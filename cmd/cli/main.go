@@ -14,9 +14,6 @@ import (
 )
 
 type Config struct {
-	AWSAccessKeyID     string `json:"awsAccessKeyId"`
-	AWSSecretAccessKey string `json:"awsSecretAccessKey"`
-	AWSRegion          string `json:"awsRegion"`
 	EnableLogging      bool   `json:"enableLogging"`
 	KrakenAPIKey       string `json:"krakenApiKey"`
 	KrakenPrivateKey   string `json:"krakenPrivateKey"`
@@ -24,14 +21,8 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	var region = os.Getenv("AWS_REGION")
-	if region == "" {
-		region = "us-east-1"
-	}
-
 	return Config{
 		EnableLogging: true,
-		AWSRegion:     region,
 	}
 }
 
@@ -129,10 +120,9 @@ func LoadConfig(ctx context.Context, filename string) (Config, error) {
 	var b []byte
 	var err error
 
-	// If we're loading the config file from AWS we rely on the AWS_REGION environment variable to tell us where to fetch
-	// it from
+	// If we're loading the config file from AWS we rely on AWS credential loading
 	if dca.HasAWSParamStorePrefix(filename) {
-		if b, err = dca.GetAWSParamStoreValue(ctx, filename, os.Getenv("AWS_REGION")); err != nil {
+		if b, err = dca.GetAWSParamStoreValue(ctx, filename); err != nil {
 			return config, fmt.Errorf("failed to get AWS param store value for kraken api key: %v", err)
 		}
 	} else if b, err = os.ReadFile(filename); err != nil {
@@ -152,7 +142,7 @@ func LoadConfig(ctx context.Context, filename string) (Config, error) {
 	}
 
 	if dca.HasAWSParamStorePrefix(config.KrakenAPIKey) {
-		if data, err := dca.GetAWSParamStoreValue(ctx, config.KrakenAPIKey, config.AWSRegion); err != nil {
+		if data, err := dca.GetAWSParamStoreValue(ctx, config.KrakenAPIKey); err != nil {
 			return config, fmt.Errorf("failed to get AWS param store value for kraken api key: %v", err)
 		} else {
 			config.KrakenAPIKey = string(data)
@@ -164,7 +154,7 @@ func LoadConfig(ctx context.Context, filename string) (Config, error) {
 	}
 
 	if dca.HasAWSParamStorePrefix(config.KrakenPrivateKey) {
-		if data, err := dca.GetAWSParamStoreValue(ctx, config.KrakenPrivateKey, config.AWSRegion); err != nil {
+		if data, err := dca.GetAWSParamStoreValue(ctx, config.KrakenPrivateKey); err != nil {
 			return config, fmt.Errorf("failed to get AWS param store value: %v", err)
 		} else {
 			config.KrakenPrivateKey = string(data)

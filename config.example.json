@@ -1,7 +1,4 @@
 {
-  "awsAccessKeyId": "...",
-  "awsSecretAccessKey": "...",
-  "awsRegion": "...",
   "enableLogging": true,
   "krakenApiKey": "...",
   "krakenPrivateKey": "...",

@@ -38,31 +38,31 @@ func StripAWSParamStorePrefix(key string) string {
 	return key
 }
 
-func GetAWSParamStoreValue(ctx context.Context, key string, region string) (_ []byte, err error) {
+func GetAWSParamStoreValue(ctx context.Context, key string) (_ []byte, err error) {
 	defer AddErr(&err, "dca.GetAWSParamStoreValue")
 	if HasAWSParamStorePlaintextPrefix(key) {
-		return GetAWSSParamStoreParameter(ctx, key, region)
+		return GetAWSSParamStoreParameter(ctx, key)
 	} else if HasAWSParamStoreEncryptedPrefix(key) {
-		return GetAWSParamStoreEncryptedParameter(ctx, key, region)
+		return GetAWSParamStoreEncryptedParameter(ctx, key)
 	}
 	return nil, fmt.Errorf("AWS Param Store key %s has an invalid prefix", key)
 }
 
-func GetAWSSParamStoreParameter(ctx context.Context, key string, region string) ([]byte, error) {
-	return getAWSParamStoreParameter(ctx, key, false, region)
+func GetAWSSParamStoreParameter(ctx context.Context, key string) ([]byte, error) {
+	return getAWSParamStoreParameter(ctx, key, false)
 }
 
-func GetAWSParamStoreEncryptedParameter(ctx context.Context, key string, region string) ([]byte, error) {
-	return getAWSParamStoreParameter(ctx, key, true, region)
+func GetAWSParamStoreEncryptedParameter(ctx context.Context, key string) ([]byte, error) {
+	return getAWSParamStoreParameter(ctx, key, true)
 }
 
-func getAWSParamStoreParameter(bgCtx context.Context, key string, encrypted bool, region string) (_ []byte, err error) {
+func getAWSParamStoreParameter(bgCtx context.Context, key string, encrypted bool) (_ []byte, err error) {
 	defer WrapErr(&err, "dca.GetAWSParamStoreValue")
 
 	ctx, cancel := context.WithTimeout(bgCtx, time.Second*5)
 	defer cancel()
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error loading AWS configuration: %w", err)
 	}
