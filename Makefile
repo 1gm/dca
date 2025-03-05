@@ -15,6 +15,11 @@ run:
 build:
 	@CGO_ENABLED=0 go build -ldflags="-X 'main.version=$(VERSION)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(DATE)' -s -w" -o bin/dca-cli ./cmd/cli
 
+build-lambda:
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X 'main.version=$(VERSION)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(DATE)' -s -w" -tags lambda.norpc -o bin/bootstrap ./cmd/lambda
+	@cd bin && zip lambda.zip bootstrap
+	@rm bin/bootstrap
+
 test:
 	go test ./... -cover
 
@@ -24,4 +29,4 @@ itest:
 clean:
 	@rm -rf bin/
 
-.PHONY:run build test itest
+.PHONY:run build build-lambda test itest clean
