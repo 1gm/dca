@@ -39,21 +39,23 @@ func NewKrakenProvider(cfg *KrakenProviderConfig) *KrakenProvider {
 	return p
 }
 
-func (p KrakenProvider) PlaceOrder(ctx context.Context, order Order) (err error) {
+func (p KrakenProvider) PlaceOrder(ctx context.Context, order PlaceOrderRequest) (res PlaceOrderResponse, err error) {
 	defer WrapErr(&err, "KrakenProvider.PlaceOrder")
 
 	var volume float64
 	if volume, err = p.Client.FetchBuyVolume(ctx, order.AmountInCents); err != nil {
-		return err
+		return res, err
 	}
 
 	p.Logger.InfoContext(ctx, fmt.Sprintf("fetched buy volume: %v", volume))
 
-	if err = p.Client.PlaceOrder(ctx, volume); err != nil {
-		return err
+	res.AmountInCents = order.AmountInCents
+	res.Volume = volume
+	if res.TransactionID, res.AdditionalInfo, err = p.Client.PlaceOrder(ctx, volume); err != nil {
+		return res, err
 	}
 
-	return nil
+	return res, nil
 }
 
 const btcUSDPair = "XBTUSD"
@@ -149,7 +151,7 @@ func (c *KrakenHTTPClient) FetchBuyVolume(ctx context.Context, amountInCents int
 }
 
 // PlaceOrder places a market order for volume BTC.
-func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err error) {
+func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (transactionID string, orderDescription string, err error) {
 	defer WrapErr(&err, "KrakenHTTPClient.PlaceOrder")
 
 	c.Logger.InfoContext(ctx, "placing buy order", "volume", volume)
@@ -166,7 +168,7 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 
 	var req *http.Request
 	if req, err = http.NewRequest("POST", "https://api.kraken.com/0/private/AddOrder", bytes.NewBufferString(params.Encode())); err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		return "", "", fmt.Errorf("failed to make request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -176,7 +178,7 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to do request: %w", err)
+		return "", "", fmt.Errorf("failed to do request: %w", err)
 	}
 
 	defer func() {
@@ -188,7 +190,7 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	var body []byte
 
 	if body, err = io.ReadAll(res.Body); err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+		return "", "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var response = struct {
@@ -202,15 +204,15 @@ func (c *KrakenHTTPClient) PlaceOrder(ctx context.Context, volume float64) (err 
 	}{}
 
 	if err = json.Unmarshal(body, &response); err != nil {
-		return fmt.Errorf("failed to unmarshal response body: %w", err)
+		return "", "", fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
 
 	if response.Error != nil && len(response.Error) > 0 {
-		return fmt.Errorf("failed to place order: %v", c.toError(response.Error[0]))
+		return "", "", fmt.Errorf("failed to place order: %v", c.toError(response.Error[0]))
 	}
 
 	c.Logger.InfoContext(ctx, "response from buy order placement", "response", response)
-	return
+	return response.Result.TransactionID[0], response.Result.Description.Order, nil
 }
 
 func (c *KrakenHTTPClient) generateSignature(path string, data url.Values, nonce int64) string {
