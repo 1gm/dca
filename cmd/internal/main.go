@@ -30,22 +30,6 @@ func NewMain() *Main {
 	}
 }
 
-// ParseFlagsAndLoadConfig parses the application config file from the --config flag and loads it.
-func (m *Main) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error {
-	var configFile string
-
-	fs := flag.NewFlagSet("dca", flag.ContinueOnError)
-	fs.StringVar(&configFile, "config", os.Getenv("CONFIG_FILE"), "path to the config file")
-
-	if err := fs.Parse(args); err != nil {
-		return err
-	} else if err = m.LoadConfig(ctx, configFile); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (m *Main) Run(ctx context.Context) (err error) {
 	m.Logger.InfoContext(ctx, "starting process", "version", dca.Version, "commit", dca.Commit, "date", dca.Date)
 
@@ -60,6 +44,22 @@ func (m *Main) Run(ctx context.Context) (err error) {
 		return err
 	} else {
 		m.Logger.Info("order successfully placed", "result", res)
+	}
+
+	return nil
+}
+
+// ParseFlagsAndLoadConfig parses the application config file from the --config flag and loads it.
+func (m *Main) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error {
+	var configFile string
+
+	fs := flag.NewFlagSet("dca", flag.ContinueOnError)
+	fs.StringVar(&configFile, "config", os.Getenv("CONFIG_FILE"), "path to the config file")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	} else if err = m.LoadConfig(ctx, configFile); err != nil {
+		return err
 	}
 
 	return nil
