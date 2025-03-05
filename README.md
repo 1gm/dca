@@ -35,6 +35,59 @@ awsssme:///path/to/my/encrypted/value
 In order to work with the *[Add Order](https://docs.kraken.com/api/docs/rest-api/add-order/)* API you need a key with permissions
 to Create & Modify orders (located under the Orders and Trades permissions).
 
+
+#### Deployment
+
+IaC is still a work in progress but for a manual deployment...
+
+1. Create an SSM Encrypted String with your config file at a well known path, e.g. `/test/dca-lambda/config`
+2. Create a Lambda in AWS. Note: the Lambda should have the `CONFIG_FILE` environment variable set to the well known path,
+e.g. `awsssme:///test/dca-lambda/config` (or `awsssm://` if you didn't encrypt your config)
+3. Using the `build-lambda` make target, create the lambda zip to upload to AWS.
+4. Give the Lambda permission to ssm:GetParameter and kms:Decrypt
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "my-statement-id",
+			"Effect": "Allow",
+			"Action": [
+				"kms:Decrypt",
+				"ssm:GetParameter"
+			],
+			"Resource": [
+				"arn:aws:ssm:us-east-1:<ACCOUNT_ID>:parameter/test/dca-lambda/config",
+				"arn:aws:kms:us-east-1:<ACCOUNT_ID>:key/<GUID_OF_SSM_KEY>"
+			]
+		}
+	]
+}
+```
+
+5. Create an EventBridge scheduler with the newly created lambda as the target. This should have a permission like..
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "lambda:InvokeFunction"
+            ],
+            "Resource": [
+                "arn:aws:lambda:us-east-1:<ACCOUNT_ID>:function:dca-lambda:*",
+                "arn:aws:lambda:us-east-1:<ACCOUNT_ID>:function:dca-lambda"
+            ]
+        }
+    ]
+}
+```
+
+6. Profit. 
+
 ### Differences vs Recurring Orders
 
 There's a difference in fees accrued and volume. 
