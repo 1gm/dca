@@ -1,5 +1,4 @@
 {
-  "enableLogging": true,
   "krakenApiKey": "...",
   "krakenPrivateKey": "...",
   "orderAmountInCents": 500

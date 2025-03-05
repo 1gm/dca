@@ -14,8 +14,6 @@ To run the application you should define the following config file (see [config.
 
 ```json5
 {
-  "enableLogging": true, 
-  // required
   "krakenApiKey": "...",
   "krakenPrivateKey": "...",
   "orderAmountInCents": 500
