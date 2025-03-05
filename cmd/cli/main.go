@@ -7,10 +7,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/1gm/dca"
 	"log/slog"
 	"os"
 	"os/signal"
+
+	"github.com/1gm/dca"
 )
 
 type Config struct {
@@ -100,12 +101,13 @@ func (m *Main) Run(ctx context.Context) (err error) {
 		Logger:    m.Logger,
 	})
 
-	order := dca.Order{AmountInCents: m.Config.OrderAmountInCents}
-	if err = provider.PlaceOrder(ctx, order); err != nil {
+	order := dca.PlaceOrderRequest{AmountInCents: m.Config.OrderAmountInCents}
+	if res, err := provider.PlaceOrder(ctx, order); err != nil {
 		return err
+	} else {
+		m.Logger.Info("order successfully placed", "res", res)
 	}
 
-	m.Logger.Info("process ran to completion")
 	return nil
 }
 

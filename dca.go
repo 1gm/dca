@@ -12,12 +12,19 @@ var (
 	Date    = "dev"
 )
 
-type Order struct {
-	AmountInCents int `json:"amount_in_cents"`
+type PlaceOrderRequest struct {
+	AmountInCents int `json:"amountInCents"`
+}
+
+type PlaceOrderResponse struct {
+	AmountInCents  int     `json:"amountInCents"`
+	Volume         float64 `json:"volume"`
+	TransactionID  string  `json:"transactionId"`
+	AdditionalInfo string  `json:"additionalInfo"`
 }
 
 type Provider interface {
-	PlaceOrder(ctx context.Context, order Order) error
+	PlaceOrder(ctx context.Context, order PlaceOrderRequest) (PlaceOrderResponse, error)
 }
 
 var (
