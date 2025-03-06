@@ -94,7 +94,7 @@ There's a difference in fees accrued and volume.
 
 #### volume difference
 
-The aim is to buy at least X amount (in cents) of Bitcoin so the system places a market order at asking price. 
+The aim is to roughly X amount (in cents) of Bitcoin so the system places a market order at asking price. 
 This means sometimes the amount purchased is higher or lower than intended but will always exceed the outcomes provided
 by the recurring fee feature (you'll get more BTC for your $$).
 
@@ -102,7 +102,6 @@ by the recurring fee feature (you'll get more BTC for your $$).
 
 The fees incurred will be those caused the taker fees associated with Kraken's [Spot Crypto](https://www.kraken.com/features/fee-schedule)
 instead of the 1.5% fee incurred by the recurring buy feature.
-
 
 Example of the recurring buy feature
 

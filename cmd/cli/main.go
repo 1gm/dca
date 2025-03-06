@@ -6,7 +6,6 @@ import (
 	"os/signal"
 
 	"github.com/1gm/dca"
-	"github.com/1gm/dca/cmd/internal"
 )
 
 var (
@@ -30,12 +29,12 @@ func realMain(args []string) int {
 	signal.Notify(ch, os.Interrupt, os.Kill)
 	go func() { <-ch; cancel() }()
 
-	m := internal.NewMain()
-	if err := m.ParseFlagsAndLoadConfig(ctx, args[1:]); err != nil {
-		m.Logger.Error("error parsing flags", "error", err)
+	app := dca.NewApp()
+	if err := app.ParseFlagsAndLoadConfig(ctx, args[1:]); err != nil {
+		app.Logger.Error("error parsing flags", "error", err)
 		return 1
-	} else if err = m.Run(ctx); err != nil {
-		m.Logger.Error("error running main", "error", err)
+	} else if err = app.Run(ctx); err != nil {
+		app.Logger.Error("error running main", "error", err)
 		return 1
 	}
 

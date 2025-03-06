@@ -1,4 +1,4 @@
-package internal
+package dca
 
 import (
 	"context"
@@ -9,37 +9,50 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-
-	"github.com/1gm/dca"
 )
 
-type Config struct {
-	KrakenAPIKey       string `json:"krakenApiKey"`
-	KrakenPrivateKey   string `json:"krakenPrivateKey"`
-	OrderAmountInCents int    `json:"orderAmountInCents"`
+var (
+	// Version of the build executable, set by the build process.
+	Version = "dev"
+	// Commit of the built executable, set by the build process.
+	Commit = "dev"
+	// Date of the built executable, set by the build process.
+	Date = "dev"
+)
+
+// AppConfig represents the configuration for App.
+type AppConfig struct {
+	// Kraken credentials
+	KrakenAPIKey     string `json:"krakenApiKey"`
+	KrakenPrivateKey string `json:"krakenPrivateKey"`
+	// The amount of volume to try to buy in cents
+	OrderAmountInCents int `json:"orderAmountInCents"`
 }
 
-type Main struct {
-	Config Config
+// App represents the core functionality of the application.
+type App struct {
+	Config AppConfig
 	Logger *slog.Logger
 }
 
-func NewMain() *Main {
-	return &Main{
+// NewApp creates a new App with an empty config and a JSON logger.
+func NewApp() *App {
+	return &App{
 		Logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 	}
 }
 
-func (m *Main) Run(ctx context.Context) (err error) {
-	m.Logger.InfoContext(ctx, "starting process", "version", dca.Version, "commit", dca.Commit, "date", dca.Date)
+// Run tries to execute a market order using a Kraken provider.
+func (m *App) Run(ctx context.Context) (err error) {
+	m.Logger.InfoContext(ctx, "starting process", "version", Version, "commit", Commit, "date", Date)
 
-	provider := dca.NewKrakenProvider(&dca.KrakenProviderConfig{
+	provider := NewKrakenProvider(&KrakenProviderConfig{
 		APIKey:    m.Config.KrakenAPIKey,
 		APISecret: m.Config.KrakenPrivateKey,
 		Logger:    m.Logger,
 	})
 
-	order := dca.PlaceOrderRequest{AmountInCents: m.Config.OrderAmountInCents}
+	order := PlaceOrderRequest{AmountInCents: m.Config.OrderAmountInCents}
 	if res, err := provider.PlaceOrder(ctx, order); err != nil {
 		return err
 	} else {
@@ -50,7 +63,7 @@ func (m *Main) Run(ctx context.Context) (err error) {
 }
 
 // ParseFlagsAndLoadConfig parses the application config file from the --config flag and loads it.
-func (m *Main) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error {
+func (m *App) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error {
 	var configFile string
 
 	fs := flag.NewFlagSet("dca", flag.ContinueOnError)
@@ -65,7 +78,9 @@ func (m *Main) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error
 	return nil
 }
 
-func (m *Main) LoadConfig(ctx context.Context, filename string) error {
+// LoadConfig loads a config file from the specified filename. If the filename has an AWS param store prefix
+// then the value is loaded from AWS Systems Manager.
+func (m *App) LoadConfig(ctx context.Context, filename string) error {
 	if filename == "" {
 		return errors.New("must specify a config file path using either CONFIG_FILE environment variable or the --config flag")
 	}
@@ -74,29 +89,29 @@ func (m *Main) LoadConfig(ctx context.Context, filename string) error {
 	var err error
 
 	// If we're loading the config file from AWS we rely on AWS credential loading
-	if dca.HasAWSParamStorePrefix(filename) {
-		if b, err = dca.GetAWSParamStoreValue(ctx, filename); err != nil {
+	if HasAWSParamStorePrefix(filename) {
+		if b, err = GetAWSParamStoreValue(ctx, filename); err != nil {
 			return fmt.Errorf("failed to get AWS param store value for kraken api key: %v", err)
 		}
 	} else if b, err = os.ReadFile(filename); err != nil {
 		return err
 	}
 
-	var config Config
+	var config AppConfig
 	if err = json.Unmarshal(b, &config); err != nil {
 		return err
 	}
 
 	if config.OrderAmountInCents <= 0 {
-		return fmt.Errorf("orderAmountInCents cannot be less than or equal to zero")
+		return errors.New("orderAmountInCents cannot be less than or equal to zero")
 	}
 
 	if config.KrakenAPIKey == "" {
-		return fmt.Errorf("krakenApiKey is required")
+		return errors.New("krakenApiKey is required")
 	}
 
-	if dca.HasAWSParamStorePrefix(config.KrakenAPIKey) {
-		if data, err := dca.GetAWSParamStoreValue(ctx, config.KrakenAPIKey); err != nil {
+	if HasAWSParamStorePrefix(config.KrakenAPIKey) {
+		if data, err := GetAWSParamStoreValue(ctx, config.KrakenAPIKey); err != nil {
 			return fmt.Errorf("failed to get AWS param store value for kraken api key: %v", err)
 		} else {
 			config.KrakenAPIKey = string(data)
@@ -104,11 +119,11 @@ func (m *Main) LoadConfig(ctx context.Context, filename string) error {
 	}
 
 	if config.KrakenPrivateKey == "" {
-		return fmt.Errorf("krakenPrivateKey is required")
+		return errors.New("krakenPrivateKey is required")
 	}
 
-	if dca.HasAWSParamStorePrefix(config.KrakenPrivateKey) {
-		if data, err := dca.GetAWSParamStoreValue(ctx, config.KrakenPrivateKey); err != nil {
+	if HasAWSParamStorePrefix(config.KrakenPrivateKey) {
+		if data, err := GetAWSParamStoreValue(ctx, config.KrakenPrivateKey); err != nil {
 			return fmt.Errorf("failed to get AWS param store value: %v", err)
 		} else {
 			config.KrakenPrivateKey = string(data)

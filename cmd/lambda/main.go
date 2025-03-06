@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/1gm/dca"
-	"github.com/1gm/dca/cmd/internal"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )
@@ -19,15 +18,15 @@ func handleRequest(ctx context.Context, event events.EventBridgeEvent) (string, 
 		return "", fmt.Errorf("no configuration file provided")
 	}
 
-	m := internal.NewMain()
+	app := dca.NewApp()
 
-	m.Logger.InfoContext(ctx, "processing event bridge message", "event", event)
+	app.Logger.InfoContext(ctx, "processing event bridge message", "event", event)
 
-	if err := m.LoadConfig(ctx, configFileName); err != nil {
-		m.Logger.Error("error loading config", "error", err)
+	if err := app.LoadConfig(ctx, configFileName); err != nil {
+		app.Logger.Error("error loading config", "error", err)
 		return "", err
-	} else if err = m.Run(ctx); err != nil {
-		m.Logger.Error("error running main", "error", err)
+	} else if err = app.Run(ctx); err != nil {
+		app.Logger.Error("error running main", "error", err)
 		return "", err
 	}
 

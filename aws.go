@@ -11,23 +11,31 @@ import (
 )
 
 const (
-	ParamStorePrefix          = "awsssm"
+	// ParamStorePrefix is the prefix for AWS Systems Manager Parameter Store keys
+	ParamStorePrefix = "awsssm"
+	// ParamStorePlaintextPrefix is the prefix indicating a plaintext AWS Parameter Store key
 	ParamStorePlaintextPrefix = "awsssm://"
+	// ParamStoreEncryptedPrefix is the prefix indicating an encrypted AWS Parameter Store key
 	ParamStoreEncryptedPrefix = "awsssme://"
 )
 
+// HasAWSParamStorePrefix checks if the given string has the AWS Parameter Store prefix
 func HasAWSParamStorePrefix(val string) bool {
 	return strings.HasPrefix(val, ParamStorePrefix)
 }
 
+// HasAWSParamStorePlaintextPrefix checks if the given key has the plaintext AWS Parameter Store prefix
 func HasAWSParamStorePlaintextPrefix(key string) bool {
 	return strings.HasPrefix(key, ParamStorePlaintextPrefix)
 }
 
+// HasAWSParamStoreEncryptedPrefix checks if the given key has the encrypted AWS Parameter Store prefix
 func HasAWSParamStoreEncryptedPrefix(key string) bool {
 	return strings.HasPrefix(key, ParamStoreEncryptedPrefix)
 }
 
+// StripAWSParamStorePrefix removes the AWS Parameter Store prefix from the key if it exists
+// Returns the key without the prefix
 func StripAWSParamStorePrefix(key string) string {
 	if strings.HasPrefix(key, ParamStoreEncryptedPrefix) {
 		return strings.TrimPrefix(key, ParamStoreEncryptedPrefix)
@@ -38,22 +46,16 @@ func StripAWSParamStorePrefix(key string) string {
 	return key
 }
 
+// GetAWSParamStoreValue retrieves a value, plaintext or encrypted, from AWS Parameter Store based
+// on the prefix.
 func GetAWSParamStoreValue(ctx context.Context, key string) (_ []byte, err error) {
 	defer AddErr(&err, "dca.GetAWSParamStoreValue")
 	if HasAWSParamStorePlaintextPrefix(key) {
-		return GetAWSSParamStoreParameter(ctx, key)
+		return getAWSParamStoreParameter(ctx, key, false)
 	} else if HasAWSParamStoreEncryptedPrefix(key) {
-		return GetAWSParamStoreEncryptedParameter(ctx, key)
+		return getAWSParamStoreParameter(ctx, key, true)
 	}
 	return nil, fmt.Errorf("AWS Param Store key %s has an invalid prefix", key)
-}
-
-func GetAWSSParamStoreParameter(ctx context.Context, key string) ([]byte, error) {
-	return getAWSParamStoreParameter(ctx, key, false)
-}
-
-func GetAWSParamStoreEncryptedParameter(ctx context.Context, key string) ([]byte, error) {
-	return getAWSParamStoreParameter(ctx, key, true)
 }
 
 func getAWSParamStoreParameter(bgCtx context.Context, key string, encrypted bool) (_ []byte, err error) {
