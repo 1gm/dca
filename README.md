@@ -35,6 +35,32 @@ awsssme:///path/to/my/encrypted/value
 In order to work with the *[Add Order](https://docs.kraken.com/api/docs/rest-api/add-order/)* API you need a key with permissions
 to Create & Modify orders (located under the Orders and Trades permissions).
 
+#### Deployment (Terraform)
+
+##### One-time Setup
+
+To setup the required terraform infrastructure for first deployment you'll need to run the [infra/scripts/setup.sh](./infra/scripts/setup.sh)
+script. This will create an S3 bucket for you to store your state in.
+
+You'll need to provide both an `AWS_REGION` and a `TERRAFORM_STATE_S3_BUCKET_NAME` variable.
+
+```bash
+AWS_REGION=us-east-1 TERRAFORM_STATE_S3_BUCKET_NAME=my-dca-lambda-terraform-state ./scripts/setup.sh 
+```
+
+This will result in output like the following...
+
+```bash
+Creating my-dca-lambda-terraform-state in us-east-1
+{
+    "Location": "/my-dca-lambda-terraform-state"
+}
+Enabling bucket versioning on my-dca-lambda-terraform-state
+Bucket created successfully, set the tf_state_bucket variable to my-dca-lambda-terraform-state
+```
+
+The
+
 
 #### Deployment
 
