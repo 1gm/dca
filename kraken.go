@@ -214,6 +214,93 @@ func (p *KrakenProvider) placeOrder(ctx context.Context, volume float64) (transa
 	return response.Result.TransactionID[0], response.Result.Description.Order, nil
 }
 
+func (p *KrakenProvider) QueryOrderInfo(ctx context.Context, transactionID string) (err error) {
+	defer WrapErr(&err, "queryOrderInfo")
+
+	p.Logger.InfoContext(ctx, "querying order info")
+
+	nonce := p.GenerateNonce()
+
+	params := url.Values{}
+	params.Set("txid", transactionID)
+	params.Set("nonce", strconv.FormatInt(nonce, 10))
+	params.Set("trades", "true")
+
+	p.Logger.InfoContext(ctx, "creating HTTP request", "body", params)
+
+	var req *http.Request
+	if req, err = http.NewRequest("POST", "https://api.kraken.com/0/private/QueryOrders", bytes.NewBufferString(params.Encode())); err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("API-Key", p.APIKey)
+	req.Header.Add("API-Sign", p.generateSignature("/0/private/QueryOrders", params, nonce))
+
+	res, err := p.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do request: %w", err)
+	}
+
+	defer func() {
+		if cerr := res.Body.Close(); cerr != nil {
+			p.Logger.WarnContext(ctx, "failed to close response body", "err", cerr)
+		}
+	}()
+
+	var body []byte
+
+	if body, err = io.ReadAll(res.Body); err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var response = struct {
+		Error  []string `json:"error"`
+		Result map[string]struct {
+			Refid    string  `json:"refid"`
+			Userref  int     `json:"userref"`
+			Status   string  `json:"status"`
+			Reason   any     `json:"reason"`
+			Opentm   float64 `json:"opentm"`
+			Closetm  float64 `json:"closetm"`
+			Starttm  int     `json:"starttm"`
+			Expiretm int     `json:"expiretm"`
+			Descr    struct {
+				Pair      string `json:"pair"`
+				Type      string `json:"type"`
+				Ordertype string `json:"ordertype"`
+				Price     string `json:"price"`
+				Price2    string `json:"price2"`
+				Leverage  string `json:"leverage"`
+				Order     string `json:"order"`
+				Close     string `json:"close"`
+			} `json:"descr"`
+			Vol        string   `json:"vol"`
+			VolExec    string   `json:"vol_exec"`
+			Cost       string   `json:"cost"`
+			Fee        string   `json:"fee"`
+			Price      string   `json:"price"`
+			Stopprice  string   `json:"stopprice"`
+			Limitprice string   `json:"limitprice"`
+			Misc       string   `json:"misc"`
+			Oflags     string   `json:"oflags"`
+			Trades     []string `json:"trades"`
+		} `json:"result"`
+	}{}
+
+	if err = json.Unmarshal(body, &response); err != nil {
+		return fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+
+	if response.Error != nil && len(response.Error) > 0 {
+		return fmt.Errorf("failed to query order info: %v", p.toError(response.Error[0]))
+	}
+
+	p.Logger.InfoContext(ctx, "response from query order info", "response", response)
+	return nil
+}
+
 func (p *KrakenProvider) generateSignature(path string, data url.Values, nonce int64) string {
 	sha := sha256.New()
 	sha.Write([]byte(strconv.FormatInt(nonce, 10) + data.Encode()))
