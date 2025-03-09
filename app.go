@@ -52,17 +52,11 @@ func (m *App) Run(ctx context.Context) (err error) {
 		Logger:    m.Logger,
 	})
 
-	if err := provider.QueryOrderInfo(ctx, "ORDER-ID-HERE"); err != nil {
-		return err
-	}
-
-	return nil
-
-	order := PlaceOrderRequest{AmountInCents: m.Config.OrderAmountInCents}
-	if res, err := provider.PlaceOrder(ctx, order); err != nil {
+	order := ExecuteOrderRequest{AmountInCents: m.Config.OrderAmountInCents}
+	if res, err := provider.ExecuteOrder(ctx, order); err != nil {
 		return err
 	} else {
-		m.Logger.Info("order successfully placed", "result", res)
+		m.Logger.Info("order successfully executed", "result", res)
 	}
 
 	return nil

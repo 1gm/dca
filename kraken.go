@@ -53,19 +53,23 @@ func NewKrakenProvider(cfg *KrakenProviderConfig) *KrakenProvider {
 	}
 }
 
-type PlaceOrderRequest struct {
+type ExecuteOrderRequest struct {
 	AmountInCents int `json:"amountInCents"`
 }
 
-type PlaceOrderResponse struct {
-	AmountInCents  int     `json:"amountInCents"`
-	Volume         float64 `json:"volume"`
-	TransactionID  string  `json:"transactionId"`
-	AdditionalInfo string  `json:"additionalInfo"`
+type ExecuteOrderResponse struct {
+	AmountInCents   int     `json:"amountInCents"`
+	TransactionID   string  `json:"transactionId"`
+	AdditionalInfo  string  `json:"additionalInfo"`
+	RequestedVolume float64 `json:"volumeRequested"`
+	VolumePurchased float64 `json:"volumePurchased"`
+	Cost            float64 `json:"cost"`
+	Fee             float64 `json:"fee"`
+	Price           float64 `json:"price"`
 }
 
-func (p *KrakenProvider) PlaceOrder(ctx context.Context, order PlaceOrderRequest) (res PlaceOrderResponse, err error) {
-	defer WrapErr(&err, "KrakenProvider.PlaceOrder")
+func (p *KrakenProvider) ExecuteOrder(ctx context.Context, order ExecuteOrderRequest) (res ExecuteOrderResponse, err error) {
+	defer WrapErr(&err, "KrakenProvider.ExecuteOrder")
 
 	var volume float64
 	if volume, err = p.fetchBuyVolume(ctx, order.AmountInCents); err != nil {
@@ -75,10 +79,19 @@ func (p *KrakenProvider) PlaceOrder(ctx context.Context, order PlaceOrderRequest
 	p.Logger.InfoContext(ctx, fmt.Sprintf("fetched buy volume: %0.8f", volume))
 
 	res.AmountInCents = order.AmountInCents
-	res.Volume = volume
+	res.RequestedVolume = volume
 	if res.TransactionID, res.AdditionalInfo, err = p.placeOrder(ctx, volume); err != nil {
 		return res, err
 	}
+
+	var oi orderInfo
+	if oi, err = p.queryOrderInfo(ctx, res.TransactionID); err != nil {
+		return res, err
+	}
+	res.Price = oi.Price
+	res.Cost = oi.Cost
+	res.Fee = oi.Fee
+	res.VolumePurchased = oi.VolumePurchased
 
 	return res, nil
 }
@@ -214,12 +227,20 @@ func (p *KrakenProvider) placeOrder(ctx context.Context, volume float64) (transa
 	return response.Result.TransactionID[0], response.Result.Description.Order, nil
 }
 
-func (p *KrakenProvider) QueryOrderInfo(ctx context.Context, transactionID string) (err error) {
+type orderInfo struct {
+	VolumePurchased float64 `json:"volumePurchased"`
+	Cost            float64 `json:"cost"`
+	Fee             float64 `json:"fee"`
+	Price           float64 `json:"price"`
+}
+
+func (p *KrakenProvider) queryOrderInfo(ctx context.Context, transactionID string) (oi orderInfo, err error) {
 	defer WrapErr(&err, "queryOrderInfo")
 
 	p.Logger.InfoContext(ctx, "querying order info")
 
-	nonce := p.GenerateNonce()
+	// add +1 to ensure the nonce generated is higher than the previous generated nonce.
+	nonce := p.GenerateNonce() + 1
 
 	params := url.Values{}
 	params.Set("txid", transactionID)
@@ -230,7 +251,7 @@ func (p *KrakenProvider) QueryOrderInfo(ctx context.Context, transactionID strin
 
 	var req *http.Request
 	if req, err = http.NewRequest("POST", "https://api.kraken.com/0/private/QueryOrders", bytes.NewBufferString(params.Encode())); err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		return oi, fmt.Errorf("failed to make request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -240,7 +261,7 @@ func (p *KrakenProvider) QueryOrderInfo(ctx context.Context, transactionID strin
 
 	res, err := p.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to do request: %w", err)
+		return oi, fmt.Errorf("failed to do request: %w", err)
 	}
 
 	defer func() {
@@ -252,7 +273,7 @@ func (p *KrakenProvider) QueryOrderInfo(ctx context.Context, transactionID strin
 	var body []byte
 
 	if body, err = io.ReadAll(res.Body); err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+		return oi, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var response = struct {
@@ -290,15 +311,28 @@ func (p *KrakenProvider) QueryOrderInfo(ctx context.Context, transactionID strin
 	}{}
 
 	if err = json.Unmarshal(body, &response); err != nil {
-		return fmt.Errorf("failed to unmarshal response body: %w", err)
+		return oi, fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
 
 	if response.Error != nil && len(response.Error) > 0 {
-		return fmt.Errorf("failed to query order info: %v", p.toError(response.Error[0]))
+		return oi, fmt.Errorf("failed to query order info: %v", p.toError(response.Error[0]))
 	}
 
-	p.Logger.InfoContext(ctx, "response from query order info", "response", response)
-	return nil
+	if oi.Fee, err = strconv.ParseFloat(response.Result[transactionID].Fee, 64); err != nil {
+		return oi, fmt.Errorf("failed to parse fee: %w", err)
+	}
+	if oi.Cost, err = strconv.ParseFloat(response.Result[transactionID].Cost, 64); err != nil {
+		return oi, fmt.Errorf("failed to parse cost: %w", err)
+	}
+	if oi.Price, err = strconv.ParseFloat(response.Result[transactionID].Price, 64); err != nil {
+		return oi, fmt.Errorf("failed to parse price: %w", err)
+	}
+	if oi.VolumePurchased, err = strconv.ParseFloat(response.Result[transactionID].Vol, 64); err != nil {
+		return oi, fmt.Errorf("failed to parse volume: %w", err)
+	}
+
+	p.Logger.InfoContext(ctx, "response from query order info", "response", oi)
+	return oi, nil
 }
 
 func (p *KrakenProvider) generateSignature(path string, data url.Values, nonce int64) string {
