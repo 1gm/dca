@@ -320,7 +320,7 @@ func (p *KrakenProvider) queryOrderInfo(ctx context.Context, transactionID strin
 		return oi, fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
 
-	p.Logger.InfoContext(ctx, "response from query order info", "response", oi)
+	p.Logger.InfoContext(ctx, "response from query order info", "response", response)
 
 	if response.Error != nil && len(response.Error) > 0 {
 		return oi, fmt.Errorf("failed to query order info: %v", p.toError(response.Error[0]))
