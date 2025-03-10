@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -145,7 +146,11 @@ func (p *KrakenProvider) fetchBuyVolume(ctx context.Context, amountInCents int) 
 
 	if err = json.Unmarshal(body, &response); err != nil {
 		return 0, fmt.Errorf("failed to unmarshal response body: %w", err)
-	} else if response.Error != nil && len(response.Error) > 0 {
+	}
+
+	p.Logger.InfoContext(ctx, "response from fetch buy volume", "response", response)
+
+	if response.Error != nil && len(response.Error) > 0 {
 		return 0, fmt.Errorf("failed to fetch buy volume: %w", errors.New(response.Error[0].(string)))
 	}
 
@@ -219,11 +224,12 @@ func (p *KrakenProvider) placeOrder(ctx context.Context, volume float64) (transa
 		return "", "", fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
 
+	p.Logger.InfoContext(ctx, "response from buy order placement", "response", response)
+
 	if response.Error != nil && len(response.Error) > 0 {
 		return "", "", fmt.Errorf("failed to place order: %v", p.toError(response.Error[0]))
 	}
 
-	p.Logger.InfoContext(ctx, "response from buy order placement", "response", response)
 	return response.Result.TransactionID[0], response.Result.Description.Order, nil
 }
 
@@ -314,24 +320,17 @@ func (p *KrakenProvider) queryOrderInfo(ctx context.Context, transactionID strin
 		return oi, fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
 
+	p.Logger.InfoContext(ctx, "response from query order info", "response", response)
+
 	if response.Error != nil && len(response.Error) > 0 {
 		return oi, fmt.Errorf("failed to query order info: %v", p.toError(response.Error[0]))
 	}
 
-	if oi.Fee, err = strconv.ParseFloat(response.Result[transactionID].Fee, 64); err != nil {
-		return oi, fmt.Errorf("failed to parse fee: %w", err)
-	}
-	if oi.Cost, err = strconv.ParseFloat(response.Result[transactionID].Cost, 64); err != nil {
-		return oi, fmt.Errorf("failed to parse cost: %w", err)
-	}
-	if oi.Price, err = strconv.ParseFloat(response.Result[transactionID].Price, 64); err != nil {
-		return oi, fmt.Errorf("failed to parse price: %w", err)
-	}
-	if oi.VolumePurchased, err = strconv.ParseFloat(response.Result[transactionID].Vol, 64); err != nil {
-		return oi, fmt.Errorf("failed to parse volume: %w", err)
-	}
+	oi.Fee = tryParseFloat64OrZero(response.Result[transactionID].Fee)
+	oi.Cost = tryParseFloat64OrZero(response.Result[transactionID].Cost)
+	oi.Price = tryParseFloat64OrZero(response.Result[transactionID].Price)
+	oi.VolumePurchased = tryParseFloat64OrZero(response.Result[transactionID].Vol)
 
-	p.Logger.InfoContext(ctx, "response from query order info", "response", oi)
 	return oi, nil
 }
 
@@ -354,4 +353,13 @@ func (p *KrakenProvider) toError(message string) error {
 	}
 
 	return errors.New(message)
+}
+
+// tryParseFloat64OrZero tries to parse a 64-bit float from a string, if it fails no error is returned.
+func tryParseFloat64OrZero(s string) float64 {
+	val, _ := strconv.ParseFloat(s, 64)
+	if math.IsNaN(val) {
+		return 0.0
+	}
+	return val
 }
