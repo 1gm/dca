@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 var (
@@ -27,6 +28,10 @@ type AppConfig struct {
 	KrakenPrivateKey string `json:"krakenPrivateKey"`
 	// The amount of volume to try to buy in cents
 	OrderAmountInCents int `json:"orderAmountInCents"`
+	// The email to send notifications from
+	NotifyFrom string `json:"notifyFrom"`
+	// The email to send notifications to
+	NotifyTo string `json:"notifyTo"`
 }
 
 // App represents the core functionality of the application.
@@ -43,27 +48,35 @@ func NewApp() *App {
 }
 
 // Run tries to execute a market order using a Kraken provider.
-func (m *App) Run(ctx context.Context) (err error) {
-	m.Logger.InfoContext(ctx, "starting process", "version", Version, "commit", Commit, "date", Date)
+func (a *App) Run(ctx context.Context) (err error) {
+	a.Logger.InfoContext(ctx, "starting process", "version", Version, "commit", Commit, "date", Date)
 
 	provider := NewKrakenProvider(&KrakenProviderConfig{
-		APIKey:    m.Config.KrakenAPIKey,
-		APISecret: m.Config.KrakenPrivateKey,
-		Logger:    m.Logger,
+		APIKey:    a.Config.KrakenAPIKey,
+		APISecret: a.Config.KrakenPrivateKey,
+		Logger:    a.Logger,
 	})
 
-	order := ExecuteOrderRequest{AmountInCents: m.Config.OrderAmountInCents}
+	var notifier Notifier = NewConsoleNotifier()
+
+	order := ExecuteOrderRequest{AmountInCents: a.Config.OrderAmountInCents}
 	if res, err := provider.ExecuteOrder(ctx, order); err != nil {
+		if nerr := notifier.NotifyFailure(ctx, err); nerr != nil {
+			a.Logger.Error("failed to notify failure", "error", nerr)
+		}
 		return err
 	} else {
-		m.Logger.Info("order successfully executed", "result", res)
+		if nerr := notifier.Notify(ctx, res); nerr != nil {
+			a.Logger.Error("failed to notify success", "error", nerr)
+		}
+		a.Logger.Info("order successfully executed", "result", res)
 	}
 
 	return nil
 }
 
 // ParseFlagsAndLoadConfig parses the application config file from the --config flag and loads it.
-func (m *App) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error {
+func (a *App) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error {
 	var configFile string
 
 	fs := flag.NewFlagSet("dca", flag.ContinueOnError)
@@ -71,7 +84,7 @@ func (m *App) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error 
 
 	if err := fs.Parse(args); err != nil {
 		return err
-	} else if err = m.LoadConfig(ctx, configFile); err != nil {
+	} else if err = a.LoadConfig(ctx, configFile); err != nil {
 		return err
 	}
 
@@ -80,7 +93,7 @@ func (m *App) ParseFlagsAndLoadConfig(ctx context.Context, args []string) error 
 
 // LoadConfig loads a config file from the specified filename. If the filename has an AWS param store prefix
 // then the value is loaded from AWS Systems Manager.
-func (m *App) LoadConfig(ctx context.Context, filename string) error {
+func (a *App) LoadConfig(ctx context.Context, filename string) error {
 	if filename == "" {
 		return errors.New("must specify a config file path using either CONFIG_FILE environment variable or the --config flag")
 	}
@@ -136,6 +149,14 @@ func (m *App) LoadConfig(ctx context.Context, filename string) error {
 		config.KrakenPrivateKey = string(data)
 	}
 
-	m.Config = config
+	a.Config = config
+
+	if config.NotifyFrom != "" && !strings.Contains(config.NotifyFrom, "@") {
+		return fmt.Errorf("notifyFrom must be an email address or empty string")
+	}
+
+	if config.NotifyTo != "" && !strings.Contains(config.NotifyTo, "@") {
+		return fmt.Errorf("notifyTo must be an email address or empty string")
+	}
 	return nil
 }

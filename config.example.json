@@ -1,5 +1,7 @@
 {
   "krakenApiKey": "...",
   "krakenPrivateKey": "...",
-  "orderAmountInCents": 500
+  "orderAmountInCents": 500,
+  "notifyFrom": "yoursource@example.com",
+  "notifyTo": "destination@example.com"
 }

@@ -7,13 +7,20 @@ import (
 	"os"
 )
 
+type Notifier interface {
+	Notify(_ context.Context, response ExecuteOrderResponse) (err error)
+	NotifyFailure(_ context.Context, f error) (err error)
+}
+
+var _ Notifier = (*ConsoleNotifier)(nil)
+
 // ConsoleNotifier is a stub implementation of a notifier used for local development.
 type ConsoleNotifier struct {
 	Destination io.Writer
 }
 
-// NewConsoleWriter creates a ConsoleNotifier configured to write output to stdout.
-func NewConsoleWriter() *ConsoleNotifier {
+// NewConsoleNotifier creates a ConsoleNotifier configured to write output to stdout.
+func NewConsoleNotifier() *ConsoleNotifier {
 	return &ConsoleNotifier{
 		Destination: os.Stdout,
 	}
