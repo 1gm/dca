@@ -8,7 +8,7 @@ import (
 )
 
 type Notifier interface {
-	Notify(_ context.Context, response ExecuteOrderResponse) (err error)
+	Notify(_ context.Context, res ExecuteOrderResponse) (err error)
 	NotifyFailure(_ context.Context, f error) (err error)
 }
 
@@ -26,10 +26,9 @@ func NewConsoleNotifier() *ConsoleNotifier {
 	}
 }
 
-func (n *ConsoleNotifier) Notify(_ context.Context, response ExecuteOrderResponse) (err error) {
+func (n *ConsoleNotifier) Notify(_ context.Context, res ExecuteOrderResponse) (err error) {
 	defer AddErr(&err, "ConsoleNotifier.Notify")
-	msg := fmt.Sprintf("bought %.8f bitcoin for %.2f (paid %.2f fee)", response.VolumePurchased, response.Cost, response.Fee)
-	if _, err = fmt.Fprintf(n.Destination, msg); err != nil {
+	if _, err = fmt.Fprintf(n.Destination, ToNotifyMessage(res)); err != nil {
 		return err
 	}
 	return nil
@@ -37,8 +36,16 @@ func (n *ConsoleNotifier) Notify(_ context.Context, response ExecuteOrderRespons
 
 func (n *ConsoleNotifier) NotifyFailure(_ context.Context, f error) (err error) {
 	defer AddErr(&err, "ConsoleNotifier.NotifyFailure")
-	if _, err = fmt.Fprintf(n.Destination, fmt.Sprintf("failed to buy bitcoin: %v", f)); err != nil {
+	if _, err = fmt.Fprintf(n.Destination, ToNotifyFailureMessage(f)); err != nil {
 		return err
 	}
 	return nil
+}
+
+func ToNotifyMessage(res ExecuteOrderResponse) string {
+	return fmt.Sprintf("bought %.8f bitcoin for %.2f (paid %.2f fee)", res.VolumePurchased, res.Cost, res.Fee)
+}
+
+func ToNotifyFailureMessage(err error) string {
+	return fmt.Sprintf("failed to buy bitcoin: %v", err)
 }

@@ -58,6 +58,10 @@ func (a *App) Run(ctx context.Context) (err error) {
 	})
 
 	var notifier Notifier = NewConsoleNotifier()
+	if a.Config.NotifyFrom != "" && a.Config.NotifyTo != "" {
+		a.Logger.InfoContext(ctx, "app configured to use SES notification")
+		notifier = NewSESNotifier(a.Config.NotifyFrom, a.Config.NotifyTo)
+	}
 
 	order := ExecuteOrderRequest{AmountInCents: a.Config.OrderAmountInCents}
 	if res, err := provider.ExecuteOrder(ctx, order); err != nil {

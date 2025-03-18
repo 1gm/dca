@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ses"
+	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
@@ -81,4 +83,67 @@ func getAWSParamStoreParameter(bgCtx context.Context, key string, encrypted bool
 		return nil, fmt.Errorf("failed to retrieve parameter from ssm: %v", err)
 	}
 	return []byte(*out.Parameter.Value), nil
+}
+
+type SESNotifier struct {
+	NotifyFrom string
+	NotifyTo   string
+}
+
+func NewSESNotifier(from string, to string) *SESNotifier {
+	return &SESNotifier{
+		NotifyFrom: from,
+		NotifyTo:   to,
+	}
+}
+
+func (n *SESNotifier) Notify(ctx context.Context, res ExecuteOrderResponse) (err error) {
+	defer AddErr(&err, "SESNotifier.Notify")
+	if err = n.send(ctx, "Successfully bought bitcoin", ToNotifyMessage(res)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (n *SESNotifier) NotifyFailure(ctx context.Context, f error) (err error) {
+	defer AddErr(&err, "SESNotifier.NotifyFailure")
+	if err = n.send(ctx, "Failed to buy bitcoin", ToNotifyFailureMessage(f)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (n *SESNotifier) send(bgCtx context.Context, subject string, body string) error {
+	ctx, cancel := context.WithTimeout(bgCtx, time.Second*5)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("error loading AWS configuration: %w", err)
+	}
+
+	client := ses.NewFromConfig(cfg)
+	input := &ses.SendEmailInput{
+		Destination: &types.Destination{
+			ToAddresses: []string{
+				n.NotifyTo,
+			},
+		},
+		Message: &types.Message{
+			Body: &types.Body{
+				Text: &types.Content{
+					Data: &body,
+				},
+			},
+			Subject: &types.Content{
+				Data: &subject,
+			},
+		},
+		Source: &n.NotifyFrom,
+	}
+
+	if _, err = client.SendEmail(bgCtx, input); err != nil {
+		return err
+	}
+	return nil
 }
