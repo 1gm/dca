@@ -91,7 +91,7 @@ func (m *App) LoadConfig(ctx context.Context, filename string) error {
 	// If we're loading the config file from AWS we rely on AWS credential loading
 	if HasAWSParamStorePrefix(filename) {
 		if b, err = GetAWSParamStoreValue(ctx, filename); err != nil {
-			return fmt.Errorf("failed to get AWS param store value for kraken api key: %v", err)
+			return fmt.Errorf("failed to get AWS param store value config file: %v", err)
 		}
 	} else if b, err = os.ReadFile(filename); err != nil {
 		return err
